@@ -6,10 +6,13 @@ Requires [PlatformIO](http://platformio.org/)
 My project is ATtiny85-based so I have a custom board file in `~/.platformio/boards` - see [Github repo file](https://github.com/funkfinger/.platformio-boards/blob/master/attiny85.json)
 
 To build:
+    
     platformio run
     
 To burn:
+    
     platformio run -t upload
     
 To clean:
+    
     platformio run -t clean

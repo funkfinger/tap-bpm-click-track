@@ -7,7 +7,8 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#define F_CPU 8000000UL // 8 MHz
+#include <avr/wdt.h>
+#include <stdlib.h>
 #include <util/delay.h>
 
 #define PORTB_MASK  (1 << PB1)
@@ -27,7 +28,6 @@ uint8_t cycle = 244; // 8000000/16384/0 = 4hz / 60 BPM
 //uint8_t cycle = 122; // 120 bpm
 //uint8_t cycle = 61;  // 240 bpm?
 
-
 int main() {
   init();  
   for(;;) {
@@ -41,7 +41,16 @@ void delay_ms(uint16_t ms) {
   }
 }
 
-void init(void) {  
+void init(void) {
+  wdt_enable(WDTO_2S);
+  // pb1 to output
+  PORTB set(PB1);
+  
+  // pb4 to input and interrupt
+  PORTB clr(PB4);
+  DDRB set(DDB4);
+  PCMSK set(PCINT4);
+  
   TCCR1 = 0;                  //stop the timer
   TCNT1 = 0;                  //zero the timer
   GTCCR = _BV(PSR1);          //reset the prescaler
@@ -54,13 +63,27 @@ void init(void) {
   sei();
 }
 
+ISR (PCINT0_vect) {
+  cli();
+  LED_PORT set(LED);
+  delay_ms(2000);
+  LED_PORT clr(LED);
+  sei();
+}
+
 ISR (TIMER1_COMPA_vect) {
+  wdt_reset();
   // cli();
   LED_PORT set(LED);
   delay_ms(60);
   cycle--;
   OCR1A = cycle;                //set the compare value
-  OCR1C = cycle;
+  // OCR1C = cycle;
   LED_PORT clr(LED);
   // reti();
+}
+
+ISR (WDT_vect) {
+  LED_PORT set(LED);
+  abort();
 }
