@@ -16,3 +16,8 @@ To burn:
 To clean:
     
     platformio run -t clean
+    
+To set fuses (on my avr dragon):
+
+    avrdude -c dragon_hvsp -p attiny85 -U lfuse:w:0x62:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m -P usb
+    
