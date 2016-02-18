@@ -3,22 +3,12 @@
 #include <avr/cpufunc.h>
 #include <util/delay.h>
 
-#include "TinyWireM.h"
-// #include "LiquidCrystal_attiny.h"
-
 #define set(x) |= (1<<x) 
 #define clr(x) &=~(1<<x) 
 #define inv(x) ^=(1<<x)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 
 #define PULSE_WIDTH 1
-
-#define GPIO_ADDR 0x27
-// LiquidCrystal_I2C lcd(GPIO_ADDR,16,2);
-
-//uint8_t cycle = 20; // cycle low limit seems to be 5 ~ 155 bpm
-// uint8_t cycle = 80; // ~ 95 bpm (TCCR1 = 1101)
-// uint8_t cycle = 60; // ~ 122 bpm (TCCR1 = 1101)
 
 // uint8_t cycle = 100; // ~ 148 bpm (TCCR1 = 1100)
 // uint8_t cycle = 123; // ~ 120 bpm (TCCR1 = 1100)
@@ -29,12 +19,6 @@ uint8_t cycle = 255; // ~ 60 bpm (TCCR1 = 1100)
 uint8_t overflowCount = 0;
 
 int main() {
-  
-  // TinyWireM.begin();
-  // lcd.init();
-  // lcd.backlight();
-  // lcd.blink();
-  // lcd.printstr("Hello, please work");
   
   DDRB set(PINB1); // port b pin 1 to output
   DDRB set(PINB2); // port b pin 2 to output
