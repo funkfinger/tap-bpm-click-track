@@ -1,7 +1,13 @@
+#define __AVR_ATtiny85__
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/cpufunc.h>
+#define F_CPU 8000000UL  // 8 MHz
 #include <util/delay.h>
+
+#include <LiquidCrystal_attiny.h>
+
 
 #define set(x) |= (1<<x) 
 #define clr(x) &=~(1<<x) 
@@ -10,6 +16,8 @@
 
 #define PULSE_WIDTH 1
 
+void blink(uint8_t times);
+
 // uint8_t cycle = 100; // ~ 148 bpm (TCCR1 = 1100)
 // uint8_t cycle = 123; // ~ 120 bpm (TCCR1 = 1100)
 // uint8_t cycle = 200; // ~ 74 bpm (TCCR1 = 1100)
@@ -17,6 +25,15 @@ uint8_t cycle = 255; // ~ 60 bpm (TCCR1 = 1100)
 
 // used to track how many times overflow inerrupt is triggered...
 uint8_t overflowCount = 0;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Set the LCD I2C address
+
+void delay_ms (uint16_t count) {
+  while(count--) {
+    _delay_ms(1);
+  }
+}
+
 
 int main() {
   
@@ -51,13 +68,34 @@ int main() {
   TCCR0B set(CS00);
   TIMSK set(TOIE0); // enable overflow interrupt
 
-
   // button interrupt
   PCMSK set(PCINT0);
   GIMSK set(PCIE);
   
+  // lcd stuff...
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  for(int i = 0; i< 3; i++) {
+    lcd.backlight();
+    delay_ms(250);
+    lcd.noBacklight();
+    delay_ms(250);
+  }
+  lcd.backlight(); // finish with backlight on
+  lcd.setCursor(0, 0);
+  lcd.printstr("hello...");
+  delay_ms(200);
+  
   // loop does nothing...
   for(;;) {
+    lcd.setCursor(0, 1);
+    lcd.print(overflowCount);
+    lcd.print(" - ");
+    lcd.print(cycle);
+    lcd.print(" - ");
+    lcd.print(TCNT0);
+    delay_ms(10);
   }
 }
 
@@ -78,16 +116,23 @@ ISR (TIMER1_COMPA_vect) {
 
 // timer 0 overflow interrupt...
 ISR (TIM0_OVF_vect) {
-  overflowCount = overflowCount > 3 ? 0 : overflowCount++;
+  overflowCount++;
+  if (overflowCount > 4) {
+    overflowCount = 0;
+  }
   PORTB inv(PIN2);
   PORTB clr(PIN4);
 }
 
 // pcint0 button press interrupt...
 ISR (PCINT0_vect) {
-  uint16_t cycleNumber; 
+  // blink(overflowCount);
+  uint16_t cycleNumber;
+
   cycleNumber = TCNT0 + (overflowCount * 255);
   cycle = cycleNumber / 4;
   TCNT0 = 0;
   PORTB set(PIN4);
 }
+
+
