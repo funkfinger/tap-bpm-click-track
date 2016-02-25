@@ -8,13 +8,17 @@
 
 #include <LiquidCrystal_attiny.h>
 
-
 #define set(x) |= (1<<x) 
 #define clr(x) &=~(1<<x) 
 #define inv(x) ^=(1<<x)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 
 #define PULSE_WIDTH 1
+
+#define BUTTON PINB4
+#define PULSE PINB1
+#define SCL PINB0
+#define SDA PINB2
 
 void blink(uint8_t times);
 
@@ -27,6 +31,8 @@ uint8_t cycle = 255; // ~ 60 bpm (TCCR1 = 1100)
 uint8_t overflowCount = 0;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // Set the LCD I2C address
+void setupLcd();
+void writeLcd();
 
 void delay_ms (uint16_t count) {
   while(count--) {
@@ -37,9 +43,14 @@ void delay_ms (uint16_t count) {
 
 int main() {
   
-  DDRB set(PINB1); // port b pin 1 to output
-  DDRB set(PINB2); // port b pin 2 to output
-  DDRB set(PINB4); // port b pin 4 to output
+  DDRB set(PULSE); // pulse out
+
+  // button stuff....
+  PORTB set(PB4); // enable pull-up resistor on button...
+  DDRB clr(BUTTON); // button in
+  // button interrupt
+  PCMSK set(PCINT4);
+  GIMSK set(PCIE);
   
   cli();
   TCCR1 = 0;
@@ -59,7 +70,6 @@ int main() {
   TCCR1 |= (1<<CS13); // Clock Select Bit 3
   
   TIMSK = (1<<OCIE1A);
-  sei();
 
   // timer 0 - clkI/O/1024 (From prescaler)
   TCCR0B = 0;
@@ -68,71 +78,81 @@ int main() {
   TCCR0B set(CS00);
   TIMSK set(TOIE0); // enable overflow interrupt
 
-  // button interrupt
-  PCMSK set(PCINT0);
-  GIMSK set(PCIE);
   
   // lcd stuff...
+  setupLcd();
+  
+  // start interrupts...
+  sei();
+
+  
+  // loop does nothing...
+  for(;;) {
+    writeLcd();
+  }
+}
+
+
+void setupLcd(void) {
   lcd.init();
   lcd.backlight();
   lcd.clear();
   for(int i = 0; i< 3; i++) {
     lcd.backlight();
-    delay_ms(250);
+    delay_ms(1);
     lcd.noBacklight();
-    delay_ms(250);
+    delay_ms(1);
   }
   lcd.backlight(); // finish with backlight on
   lcd.setCursor(0, 0);
   lcd.printstr("hello...");
-  delay_ms(200);
-  
-  // loop does nothing...
-  for(;;) {
-    lcd.setCursor(0, 1);
-    lcd.print(overflowCount);
-    lcd.print(" - ");
-    lcd.print(cycle);
-    lcd.print(" - ");
-    lcd.print(TCNT0);
-    delay_ms(10);
-  }
 }
+
+void writeLcd(void) {
+  lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print(overflowCount);
+  lcd.print(" - ");
+  lcd.print(cycle);
+  lcd.print(" - ");
+  lcd.print(TCNT0);
+  delay_ms(0);
+}
+
 
 // timer 1 compare interrupt...
 ISR (TIMER1_COMPA_vect) {
   // this is odd, pocket operator is 2 beats per quarter note or 2ppqn (2 pulse per quarter note)
-  if (check_bit(PORTB, PINB1)) {
-    PORTB clr(PINB1);
+  if (check_bit(PORTB, PULSE)) {
+    PORTB clr(PULSE);
     OCR1A = cycle;
     OCR1C = cycle;
   }
   else {
-    PORTB set(PINB1);
+    PORTB set(PULSE);
     OCR1A = PULSE_WIDTH;
     OCR1C = PULSE_WIDTH;
   }
 }
+
 
 // timer 0 overflow interrupt...
 ISR (TIM0_OVF_vect) {
   overflowCount++;
   if (overflowCount > 4) {
     overflowCount = 0;
+    cycle = 255;
   }
-  PORTB inv(PIN2);
-  PORTB clr(PIN4);
 }
 
-// pcint0 button press interrupt...
-ISR (PCINT0_vect) {
-  // blink(overflowCount);
-  uint16_t cycleNumber;
-
-  cycleNumber = TCNT0 + (overflowCount * 255);
-  cycle = cycleNumber / 4;
-  TCNT0 = 0;
-  PORTB set(PIN4);
+// pcint4 button press interrupt...
+ISR (PCINT4_vect) {
+  // uint16_t cycleNumber;
+  // cycleNumber = TCNT0 + (overflowCount * 255);
+  // cycle = cycleNumber / 4;
+  // TCNT0 = 0;
+  cycle++;
+  return;
 }
 
 

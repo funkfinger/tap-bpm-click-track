@@ -20,10 +20,5 @@ To clean:
 To set fuses (on my avr dragon):
 
     avrdude -c dragon_hvsp -p attiny85 -U lfuse:w:0x62:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m -P usb
-
-Timer didn't seem to be working (was too slow), so I'm now setting fuses to: 
-
-    avrdude -c dragon_hvsp -p attiny85 -U lfuse:w:0xE2:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m -P usb
-
     
 ATTiny85 I2C LCD modified from [https://codeload.github.com/platisd/ATtiny85-LCD-library/zip/master](https://codeload.github.com/platisd/ATtiny85-LCD-library/zip/master)
