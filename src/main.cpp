@@ -1,118 +1,130 @@
-#define __AVR_ATtiny85__
-
-#include <avr/io.h>
 #include <avr/interrupt.h>
-#include <avr/cpufunc.h>
-#define F_CPU 8000000UL  // 8 MHz
+#include <avr/io.h>
 #include <util/delay.h>
 
-#define set(x) |= (1<<x) 
+#define LED 1
+#define BUTTON 2
+#define SIGNAL_PIN 0
+
+#define set(x) |= (1<<x)
 #define clr(x) &=~(1<<x) 
 #define inv(x) ^=(1<<x)
-#define check_bit(var,pos) ((var) & (1<<(pos)))
+#define chkBit(x) & (1<<(x)))
 
-#define PULSE_WIDTH 1
+void setupTimers() {
 
-#define BUTTON PINB4
-#define PULSE PINB1
-#define SCL PINB0
-#define SDA PINB2
-
-void blink(uint8_t times);
-
-// uint8_t cycle = 100; // ~ 148 bpm (TCCR1 = 1100)
-// uint8_t cycle = 123; // ~ 120 bpm (TCCR1 = 1100)
-// uint8_t cycle = 200; // ~ 74 bpm (TCCR1 = 1100)
-uint8_t cycle = 255; // ~ 60 bpm (TCCR1 = 1100)
-
-// used to track how many times overflow inerrupt is triggered...
-uint8_t overflowCount = 0;
-
-void _ms (uint16_t count) {
-  while(count--) {
-    _delay_ms(1);
-  }
+  // timer 0 - used for ticks...
+  TCCR0A set(WGM01); // CTC mode. set WGM01
+  
+  // divide by 64
+  TCCR0B set(CS00);
+  TCCR0B set(CS01);
+  TCCR0B clr(CS02);
+  
+  OCR0A = 125; // 8,000,000 / 64 / 125 = 1ms
+  TIMSK set(OCIE0A); // set timer to interrupt
 }
 
+void setupButton() {
+  // button stuff....
+  DDRB clr(BUTTON); // button is input...
+  PORTB set(BUTTON);
+  GIMSK set(INT0);
+  MCUCR clr(ISC00);
+  MCUCR clr(ISC01);
+}
 
-int main() {
+void setupSignal() {
+  DDRB set(SIGNAL_PIN);  
+}
+
+void setupLed() {
+  // led is output...
+  DDRB set(LED);
+}
+
+void setup(void) {
+  // stop interrupts...
   cli();
   
-  DDRB set(PULSE); // pulse out
-
-  // button stuff....
-  PORTB set(PB4); // enable pull-up resistor on button...
-  DDRB clr(BUTTON); // button in
-  // button interrupt
-  PCMSK set(PCINT4);
-  GIMSK set(PCIE);
-  
-  TCCR1 = 0;
-  TCNT1 = 0;
-  GTCCR = _BV(PSR1);
-  
-  OCR1A = cycle;
-  OCR1C = cycle;
-  
-  TCCR1 = 0;
-  TCCR1 |= (1<<CTC1); // Clear Timer/Counter on Compare Match
-  
-  // 1100 = CK/2048
-  TCCR1 |= (0<<CS10); // Clock Select Bit 0
-  TCCR1 |= (0<<CS11); // Clock Select Bit 1
-  TCCR1 |= (1<<CS12); // Clock Select Bit 2
-  TCCR1 |= (1<<CS13); // Clock Select Bit 3
-  
-  TIMSK = (1<<OCIE1A);
-
-  // timer 0 - clkI/O/1024 (From prescaler)
-  TCCR0B = 0;
-  TCCR0B set(CS02);
-  TCCR0B clr(CS01);
-  TCCR0B set(CS00);
-  TIMSK set(TOIE0); // enable overflow interrupt
+  setupLed();
+  setupTimers();
+  setupButton();
 
   // start interrupts...
   sei();
 
-  
-  // loop does nothing...
+}
+
+void loop() {
   for(;;) {
   }
 }
 
+int main() {
+  setup();
+  loop();
+}
 
+volatile uint32_t mills;
+volatile uint32_t pOptick = 0;
+volatile uint8_t pOpPulse = 0;
+volatile uint16_t pOpBpmValue = 261;
+volatile uint32_t buttonOffTill = 0;
+volatile uint32_t lastClickTime;
+volatile uint8_t consecutiveClicks = 0;
 
-
-// timer 1 compare interrupt...
-ISR (TIMER1_COMPA_vect) {
-  // this is odd, pocket operator is 2 beats per quarter note or 2ppqn (2 pulse per quarter note)
-  if (check_bit(PORTB, PULSE)) {
-    PORTB clr(PULSE);
-    OCR1A = cycle;
-    OCR1C = cycle;
+ISR (TIMER0_COMPA_vect) {
+  mills++;
+  pOptick++;
+  // timer for Pocket Operator synce signal
+  if (pOptick == pOpBpmValue) {
+    pOptick = 0;
+    pOpPulse = 10; // length of Pocket Operator sync signal - just something that works....
+    PORTB set(SIGNAL_PIN);
+  }
+  // timer for length of signal 
+  if (pOpPulse == 0) {
+    PORTB clr(SIGNAL_PIN);
   }
   else {
-    PORTB set(PULSE);
-    OCR1A = PULSE_WIDTH;
-    OCR1C = PULSE_WIDTH;
+    pOpPulse--;
+  }
+  
+  // timer for button debounce...
+  if (buttonOffTill < mills) {
+    GIMSK set(INT0); // turn the button interrupt on after debounce...
+    buttonOffTill = 0;
+  }
+  
+  // timer for wait period between bpm clicks - wait (about?) 2 seconds and reset bpm clicker
+  if (mills > lastClickTime + 2000) {
+    consecutiveClicks = 0;
+    PORTB set(LED);
   }
 }
 
+volatile uint32_t firstClickTime;
+volatile uint16_t totalTime;
 
-// timer 0 overflow interrupt...
-ISR (TIM0_OVF_vect) {
-  overflowCount++;
-  if (overflowCount > 4) {
-    overflowCount = 0;
-    // cycle = 255;
+// PIN 2 is INT0
+ISR (INT0_vect) {
+  PORTB clr(LED);
+  lastClickTime = mills;
+  if (consecutiveClicks > 0) {
+    totalTime = mills - firstClickTime;
+    pOpBpmValue = round((totalTime / consecutiveClicks) / 2); // Pocket Operator seems to sync on 2 beats per measure...
   }
+  else {
+    firstClickTime = mills;
+  }
+  consecutiveClicks++;
+  GIMSK clr(INT0); // turn the button interrupt off for debounce...
+  buttonOffTill = mills + 200; // time to debounce...
 }
 
-// pcint4 button press interrupt...
-ISR (PCINT4_vect) {
-  cycle++;
-  return;
-}
+
+
+
 
 
