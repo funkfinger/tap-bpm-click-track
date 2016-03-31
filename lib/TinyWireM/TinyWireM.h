@@ -38,7 +38,7 @@
 #define TinyWireM_h
 
 #include <inttypes.h>
-#include "Arduino.h"
+// #include "Arduino.h" // removing - this isn't an Arduino project...
 #define USI_SEND         0              // indicates sending to TWI
 #define USI_RCVE         1              // indicates receiving from TWI
 #define USI_BUF_SIZE    18              // bytes in message buffer
