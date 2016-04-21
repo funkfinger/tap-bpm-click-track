@@ -3,6 +3,7 @@
 #include <util/delay.h>
 
 #define LED 1
+#define LED2 3
 #define BUTTON 2
 #define SIGNAL_PIN 0
 
@@ -41,6 +42,7 @@ void setupSignal() {
 void setupLed() {
   // led is output...
   DDRB set(LED);
+  DDRB set(LED2);
 }
 
 void setup(void) {
@@ -75,6 +77,7 @@ volatile uint32_t lastClickTime;
 volatile uint8_t consecutiveClicks = 0;
 
 ISR (TIMER0_COMPA_vect) {
+  PORTB inv(LED2);
   mills++;
   pOptick++;
   // timer for Pocket Operator synce signal
